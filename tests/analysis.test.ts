@@ -1,0 +1,10 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { analyzeRules, inferStudyType, meaningfulWords, safeJsonExtract } from '../lib/analysis';
+import { buildSearchQuery,rankJournals } from '../lib/journals';
+import { DEMO_MANUSCRIPT } from '../lib/demo';
+test('detects qualitative and review designs',()=>{assert.equal(inferStudyType('A systematic review following PRISMA'),'Systematic review / meta-analysis');assert.equal(inferStudyType('Qualitative interviews with thematic analysis'),'Qualitative research');});
+test('analyzes sample without fabricated quality claims',()=>{const result=analyzeRules(DEMO_MANUSCRIPT,'sample.txt');assert.ok(result.wordCount>100);assert.equal(result.mode,'rules');assert.equal(result.studyType,'Observational research');assert.ok(result.checks.length>=7);});
+test('extracts useful keywords',()=>{assert.ok(meaningfulWords('exercise exercise sleep sleep sleep student survey').includes('sleep'));assert.ok(buildSearchQuery('sleep quality exercise interventions university students').length>10);});
+test('parses fenced AI result',()=>{assert.deepEqual(safeJsonExtract('```json\n{"title":"A"}\n```'),{title:'A'});});
+test('journal ranking only includes real returned journal sources',()=>{const works=[{display_name:'Exercise and sleep research',doi:'https://doi.org/10.1/test',publication_year:2025,type:'article',primary_location:{source:{id:'https://openalex.org/S123',display_name:'Sample Journal',type:'journal',issn_l:'1234-5678'}}},{display_name:'Study of sleep and exercise',publication_year:2024,primary_location:{source:{id:'https://openalex.org/S123',display_name:'Sample Journal',type:'journal'}}},{display_name:'Sleep study preprint',primary_location:{source:{id:'https://openalex.org/S555',display_name:'Archive',type:'repository'}}}];const journals=rankJournals(works,'sleep exercise');assert.equal(journals.length,1);assert.equal(journals[0].count,2);assert.equal(journals[0].name,'Sample Journal');});
