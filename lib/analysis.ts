@@ -1,6 +1,6 @@
 import type { Analysis, Check } from './types';
 
-const STOP = new Set('the and with from this that study using among between effects effect into their they were have been will would could should those these there about which whether when under over based analysis research findings results paper manuscript article participants patients population methods conclusion introduction abstract background keywords discussion objective objectives purpose investigate evaluates evaluation approach compared comparison'.split(' '));
+export const STOP = new Set('the and with from this that study using among between effects effect into their they were have been will would could should those these there about which whether when under over based analysis research findings results paper manuscript article participants patients population methods conclusion introduction abstract background keywords discussion objective objectives purpose investigate evaluates evaluation approach compared comparison for its our are can also has not but than such via towards toward new novel proposed propose proposes method methods using use used show shows shown work present presents efficient improved improving based-on'.split(' '));
 export function meaningfulWords(input: string, max = 9): string[] {
   const counts = new Map<string,number>();
   for (const w of (input.toLowerCase().match(/[a-z][a-z-]{3,}/g) || [])) {

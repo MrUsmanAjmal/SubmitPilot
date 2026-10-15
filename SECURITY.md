@@ -1,14 +1,14 @@
 # Security notes
 
-SubmitPilot is an open-source MVP. Do not assume the presence of a file upload limit and access code makes this an enterprise security product.
+SubmitPilot is an open-source MVP. Do not assume the presence of a file upload limit and AI rate limit makes this an enterprise security product.
 
 ## API key protection
 
-- Store `ANTHROPIC_API_KEY` and `CLAUDE_ACCESS_CODE` **only in server-side environment variables**.
-- AI requests are disabled unless `CLAUDE_ACCESS_CODE` is 12+ characters and provided by the browser. This is a shared access code, NOT user authentication.
+- Store `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `ELSEVIER_API_KEY` and `OPENALEX_API_KEY` **only in server-side environment variables**.
+- AI requests are public and limited per IP address by an in-memory limiter (`AI_REQUESTS_PER_HOUR`). It is not abuse-proof: IPs can be rotated, and the limit resets on restart.
 - Do not open a production deployment with paid keys to untrusted public traffic without proper authentication, abuse throttling, per-user quotas, observability, and payment limits.
 - Set spending limits and monitor Anthropic usage in Claude Console.
-- Rotate access codes/keys if disclosed.
+- Rotate keys if disclosed.
 
 ## Untrusted documents
 
@@ -18,7 +18,7 @@ Uploaded manuscripts are treated as untrusted data and wrapped as such in LLM in
 
 - The application does not store uploaded files in a backend database, but it does keep extracted document text in browser `sessionStorage` to support the workspace.
 - Configure host-level logs and storage carefully; logs can be retained by the operator.
-- Manuscript excerpts are shared with Anthropic when optional Claude processing is unlocked. Journal search keywords/titles are sent to OpenAlex.
+- Topics, abstracts and manuscript excerpts are shared with Google Gemini (or Anthropic, if configured instead) when AI is configured; Gemini's free tier may use them to improve Google's products. Journal search keywords/titles are sent to OpenAlex.
 - Avoid sensitive or embargoed material until you understand service terms, data flow, consent and legal requirements.
 
 ## Reporting vulnerabilities

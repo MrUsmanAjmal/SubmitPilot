@@ -8,7 +8,7 @@ SubmitPilot helps researchers explore *where related work is published*, screen 
 
 ## Project capabilities at a glance
 
-- Premium responsive landing, FAQ-style product information, pricing/availability, About, privacy and terms pages.
+- Premium responsive landing, FAQ-style product information, About, privacy and terms pages.
 - Real manuscript uploads: `.docx`, searchable `.pdf` or `.txt`, max 4 MB; or paste text.
 - Clear rule-based screening without any paid API key; optional Claude research interpretation when configured.
 - Live journal discovery via **OpenAlex** using recently published work, showing verifiable example articles with DOI/OpenAlex links. Manuscript sessions additionally receive a modest study-design-title signal, explicitly identified as a proxy rather than acceptance verification.
@@ -37,22 +37,38 @@ Open **http://localhost:3000**.
 Open `.env.local` and set:
 
 ```env
-ANTHROPIC_API_KEY=your_claude_console_api_key
-ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
-CLAUDE_ACCESS_CODE=your_private_random_16_plus_character_code
-OPENALEX_API_KEY=your_openalex_key_optional
+GEMINI_API_KEY=your_free_google_ai_studio_key
+GEMINI_MODEL=gemini-2.5-flash
+AI_REQUESTS_PER_HOUR=30
+OPENALEX_API_KEY=your_free_openalex_key
+ELSEVIER_API_KEY=your_scopus_key_optional
 NEXT_PUBLIC_CONTACT_EMAIL=your_real_business_email_optional
 ```
 
 **API secrets must be used server-side only.** NEVER prefix them with `NEXT_PUBLIC_`, put them in GitHub, or paste them into public forms.
 
-### Claude Code vs Claude API
+### AI providers
 
-Claude Code is the development assistant, **not** the credential used by this application. The app's AI calls use the **Anthropic Messages API** and a separate API key billed to Claude Console. A Claude Team subscription does not automatically supply free API calls.
+- **Google Gemini (recommended, free tier):** create a key at https://aistudio.google.com/apikey and set `GEMINI_API_KEY`. Free-tier requests are rate-limited, and Google may use free-tier content to improve its products, and the privacy page and upload form warn users about this.
+- **Anthropic Claude (paid):** set `ANTHROPIC_API_KEY` and optionally `ANTHROPIC_MODEL`. Used only when `GEMINI_API_KEY` is empty.
 
-When Claude is configured, enter the `CLAUDE_ACCESS_CODE` on the research workspace to unlock private Claude calls. The app refuses paid Claude requests unless a **12+ character access code** is set server-side and entered by the user. The access code is held in the browser tab session, not committed to GitHub. This is a simple owner-level gate, **not** production-grade authentication or rate limiting.
+AI is available to every visitor, limited to `AI_REQUESTS_PER_HOUR` units per IP address (default 30; a topic search uses about 3, a manuscript analysis 2). When the limit or the Gemini free quota is reached, searches fall back to non-AI keywords instead of failing. The limiter is in memory, so it resets on restart and is per server instance; use a shared store such as Redis behind a load balancer or on serverless hosting.
 
-If your API account does not support the default model, update `ANTHROPIC_MODEL` to one enabled on your account. If model calls fail, manuscript screening falls back to rules and displays the reason; the submission assistant returns a descriptive error.
+### Journal discovery
+
+Journal matching uses OpenAlex topics: a title/abstract search detects the manuscript's topics and subfield, two `group_by` queries count every journal's articles in those topics and keyword matches since 2019, and journals are ranked by scope focus (share of their output in those topics, subfield alignment) rather than raw volume. Each search makes about five OpenAlex requests; without `OPENALEX_API_KEY` all visitors share a small daily budget per server IP, so set a free key for public deployments. With Gemini configured, one AI call writes the search keywords and another re-ranks the top candidates.
+
+### Journal metrics
+
+- **Quartiles:** download the SCImago list once a year into `data/scimago.csv` (see `data/README.md`). Without it, quartiles show as "Q n/a".
+- **CiteScore:** set `ELSEVIER_API_KEY` (free from dev.elsevier.com, non-commercial use) to add Scopus CiteScore and SNIP.
+- OpenAlex supplies 2-year mean citedness, H-index and APC with no setup. The Clarivate Impact Factor has no free licence and is not shown.
+
+### Conferences and workshops
+
+Events come from ccf-deadlines (`ccfddl.github.io/conference/allconf.yml`, cached 12 h), CORE ranks (cached 7 days), WikiCFP category pages (cached 6 h, requests spaced 5 s apart as its robots.txt asks) and, with Gemini, a Google-Search-grounded AI call. AI-found events are labelled and link to their sources; deadlines are never estimated.
+
+If your provider rejects the default model, update `GEMINI_MODEL` or `ANTHROPIC_MODEL` to one enabled on your account. If model calls fail, manuscript screening falls back to rules and displays the reason; the submission assistant returns a descriptive error.
 
 ## 3. Push the repository to GitHub
 
@@ -91,7 +107,7 @@ app/
   workspace/              # upload, screen, match, submit
   journals/               # standalone discovery
   how-it-works/           # transparent product guide
-  pricing/ about/ privacy/ terms/
+  about/ privacy/ terms/
   api/analyze/route.ts    # document extraction, rules, optional Claude
   api/journals/route.ts   # live OpenAlex discovery
   api/answer/route.ts     # grounded response drafting
