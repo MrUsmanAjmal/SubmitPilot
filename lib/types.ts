@@ -12,6 +12,9 @@ export type JournalMetrics = {
   citeScore:number|null; citeScoreYear:string|null; snip:number|null;
   citeScoreQuartile:'Q1'|'Q2'|'Q3'|'Q4'|null; citeScorePercentile:number|null; citeScoreSubject:string|null;
   openAlexCitedness2y:number|null; openAlexHIndex:number|null; apcUsd:number|null; inDoaj:boolean|null;
+  /** open-access-apc: fully open access, authors pay an APC. open-access-free: fully open access, no APC (diamond).
+   *  hybrid: subscription journal, free to publish, optional paid open access. subscription: free to publish, no paid OA option listed. */
+  accessModel:'open-access-apc'|'open-access-free'|'hybrid'|'subscription'|'unknown';
 };
 /** Impact Factor and CiteScore as displayed by the publisher, found by AI web search with a source link. */
 export type PublisherMetrics = {

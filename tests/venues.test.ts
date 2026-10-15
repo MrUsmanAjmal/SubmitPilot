@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseScimago, normalizeIssn, parseScopusEntry, percentileQuartile } from '../lib/metrics';
 import { ccfToEvent, parseDeadline, parseWikicfp, relevance, statusOf } from '../lib/events';
-import { parsePublisherMetrics } from '../lib/impact';
+import { expiryFor, parsePublisherMetrics, verifyAgainstResults } from '../lib/impact';
+import { accessModel } from '../lib/metrics';
 
 test('parses the SCImago CSV with decimal commas and multiple ISSNs', () => {
   const csv = 'Rank;Sourceid;Title;Type;Issn;SJR;SJR Best Quartile;H index;Citations / Doc. (2years);Categories\n' +
@@ -68,6 +69,27 @@ test('keeps only well-formed publisher metrics for requested journals', () => {
   assert.equal(ivc?.impactFactor, 5); assert.equal(ivc?.citeScore, 7.7); assert.equal(ivc?.scopusQuartile, 'Q1'); assert.equal(ivc?.impactFactorYear, '2024');
   assert.equal(map.has('S999'), false);
   assert.equal(map.get('S414566')?.impactFactor, null); assert.equal(map.get('S414566')?.sourceUrl, null);
+});
+
+test('keeps a looked-up number only when the cited page text contains it', () => {
+  const results = [{ url: 'https://a.example/ivc', title: 'Image and Vision Computing', text: 'CiteScore 7.7 Impact Factor 5.0', provider: 'test' }];
+  const base = { impactFactorYear: '2024', citeScoreYear: '2025', scopusQuartile: null, jcrQuartile: null, checkedAt: '' };
+  const ok = verifyAgainstResults({ ...base, impactFactor: 5, citeScore: 7.7, sourceUrl: 'https://a.example/ivc' }, results);
+  assert.equal(ok.impactFactor, 5); assert.equal(ok.citeScore, 7.7);
+  const invented = verifyAgainstResults({ ...base, impactFactor: 4.2, citeScore: 7.7, sourceUrl: 'https://a.example/ivc' }, results);
+  assert.equal(invented.impactFactor, null); assert.equal(invented.impactFactorYear, null); assert.equal(invented.citeScore, 7.7);
+});
+
+test('saved Impact Factors expire on July 1 after the June JCR release', () => {
+  assert.equal(new Date(expiryFor(true, new Date(Date.UTC(2026, 9, 16)))).toISOString().slice(0, 10), '2027-07-01');
+  assert.equal(new Date(expiryFor(true, new Date(Date.UTC(2027, 2, 1)))).toISOString().slice(0, 10), '2027-07-01');
+});
+
+test('classifies hybrid, open-access and free-to-publish journals', () => {
+  assert.equal(accessModel({ isOa: false, apcUsd: 2100, authorPaidOA: true }), 'hybrid');
+  assert.equal(accessModel({ isOa: true, inDoaj: true, apcUsd: 2382 }), 'open-access-apc');
+  assert.equal(accessModel({ isOa: true, inDoaj: true, apcUsd: 0 }), 'open-access-free');
+  assert.equal(accessModel({ isOa: false, apcUsd: null }), 'subscription');
 });
 
 test('relevance rewards full phrase matches', () => {

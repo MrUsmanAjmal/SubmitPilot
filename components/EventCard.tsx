@@ -3,7 +3,7 @@ import type { ResearchEvent } from '@/lib/types';
 import { CalendarDays, ClipboardList, ExternalLink, MapPin, Timer } from 'lucide-react';
 
 const day = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : null;
-const SOURCE_LABEL: Record<ResearchEvent['source'], string> = { 'ccf-deadlines': 'ccf-deadlines (curated)', wikicfp: 'WikiCFP', 'ai-web': 'AI web search' };
+const SOURCE_LABEL: Record<ResearchEvent['source'], string> = { 'ccf-deadlines': 'ccf-deadlines (curated)', wikicfp: 'WikiCFP', 'ai-web': 'Web search' };
 
 function StatusBadge({ event }: { event: ResearchEvent }) {
   if (event.status === 'upcoming') return <span className="status status-open"><Timer size={13} /> {event.daysLeft === 0 ? 'Due today' : `${event.daysLeft} day${event.daysLeft === 1 ? '' : 's'} left`}</span>;

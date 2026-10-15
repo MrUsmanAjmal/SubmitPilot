@@ -4,6 +4,19 @@ import { ArrowUpRight, BookOpen, ExternalLink, Check, Copy, LoaderCircle, Shield
 import { useState } from 'react';
 
 const fmt = (n: number | null, digits = 2) => n == null ? '—' : n.toLocaleString('en-US', { maximumFractionDigits: digits });
+const usd = (n: number) => `$${n.toLocaleString('en-US')}`;
+const ACCESS: Record<Journal['metrics']['accessModel'], { label: string; detail: (m: Journal['metrics']) => string }> = {
+  'open-access-apc': { label: 'Open access · author pays APC', detail: m => `Fully open access. Authors pay ${m.apcUsd ? usd(m.apcUsd) : 'an article processing charge'} after acceptance.` },
+  'open-access-free': { label: 'Open access · free to publish', detail: () => 'Fully open access with no article processing charge (diamond open access).' },
+  hybrid: { label: 'Hybrid · free or paid open access', detail: m => `Free to publish under the subscription model, or pay ${m.apcUsd ? usd(m.apcUsd) : 'an APC'} to make your article open access.` },
+  subscription: { label: 'Subscription · free to publish', detail: () => 'No publication fee; articles are behind a subscription. No paid open-access option is listed.' },
+  unknown: { label: 'Access model not listed', detail: () => 'Check the journal site for open-access options and fees.' },
+};
+function apcText(m: Journal['metrics']): string {
+  if (m.accessModel === 'open-access-free' || m.accessModel === 'subscription') return 'None';
+  if (m.apcUsd == null || m.apcUsd === 0) return '—';
+  return m.accessModel === 'hybrid' ? `${usd(m.apcUsd)} (optional)` : usd(m.apcUsd);
+}
 type Status = 'idle' | 'loading' | 'done' | 'error';
 /** Indexing status from SCImago (Scopus) and the publisher-reported Impact Factor (Web of Science). */
 export function indexStatus(journal: Journal, p: PublisherMetrics | undefined, status: Status): { label: string; tone: 'good' | 'none' | 'unknown' } {
@@ -43,7 +56,7 @@ export default function JournalCard({ journal, index, fieldMode = false, publish
     ['Cites / doc (2y)', fmt(m.citesPerDoc2y), 'SCImago citations per document over 2 years, comparable to an impact factor'],
     ['2y citedness', fmt(m.openAlexCitedness2y), 'OpenAlex 2-year mean citedness, comparable to an impact factor'],
     ['H-index', fmt(m.scimagoHIndex ?? m.openAlexHIndex, 0), 'Journal H-index'],
-    ['APC', m.apcUsd == null ? '—' : m.apcUsd === 0 ? 'None' : `$${m.apcUsd.toLocaleString('en-US')}`, 'Article processing charge listed in OpenAlex (open-access fee)'],
+    ['APC', apcText(m), 'Article processing charge: the fee authors pay to publish open access (from OpenAlex)'],
   ];
   return <article className="journal-card">
     <div className="journal-top">
@@ -66,7 +79,7 @@ export default function JournalCard({ journal, index, fieldMode = false, publish
     <div className="journal-meta">
       <span className="pill pill-green">{journal.fitLabel}</span>
       {fieldMode ? null : <span className="pill">{journal.focusPercent}% of output in your topic</span>}
-      {m.inDoaj ? <span className="pill">Open access (DOAJ)</span> : journal.openAccess ? <span className="pill">Open access</span> : <span className="pill">Subscription / hybrid</span>}
+      <span className={`pill access-${m.accessModel}`} title={ACCESS[m.accessModel].detail(m)}>{ACCESS[m.accessModel].label}</span>
       {[...new Set(m.categories)].map(c => <span className="pill" key={c}>{c}</span>)}
     </div>
     {expanded ? <div className="journal-expand">

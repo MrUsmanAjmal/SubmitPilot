@@ -9,3 +9,4 @@ coverage/
 .tsbuildinfo
 *.tsbuildinfo
 data/scimago*.csv
+data/cache/

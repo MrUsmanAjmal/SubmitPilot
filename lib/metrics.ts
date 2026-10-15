@@ -62,7 +62,7 @@ export function scimagoTable(): Map<string, ScimagoRow> | null {
 }
 
 /** Scopus record for one ISSN. `found: false` means Scopus answered that it does not index this ISSN. */
-type Scopus = { found: boolean; citeScore: number | null; year: string | null; snip: number | null; sjr: number | null; percentile: number | null; quartile: JournalMetrics['quartile']; subject: string | null };
+type Scopus = { found: boolean; citeScore: number | null; year: string | null; snip: number | null; sjr: number | null; percentile: number | null; quartile: JournalMetrics['quartile']; subject: string | null; openAccess?: boolean | null; authorPaidOA?: boolean | null };
 const scopusCache = new Map<string, { at: number; value: Scopus | null }>();
 let scopusActive = 0; const scopusWaiting: (() => void)[] = [];
 /** Elsevier allows a few requests per second per key, so at most 4 run at once. */
@@ -73,7 +73,7 @@ async function scopusSlot<T>(run: () => Promise<T>): Promise<T> {
 }
 /** CiteScore quartile from the best subject percentile, as Scopus defines it (Q1 = 75th percentile or above). */
 export const percentileQuartile = (p: number | null): JournalMetrics['quartile'] => p == null ? null : p >= 75 ? 'Q1' : p >= 50 ? 'Q2' : p >= 25 ? 'Q3' : 'Q4';
-type ScopusEntry = { 'subject-area'?: { '@code'?: string; $?: string }[]; SNIPList?: { SNIP?: { $?: string }[] }; SJRList?: { SJR?: { $?: string }[] }; citeScoreYearInfoList?: { citeScoreCurrentMetric?: string; citeScoreCurrentMetricYear?: string; citeScoreYearInfo?: { '@year'?: string; citeScoreInformationList?: { citeScoreInfo?: { citeScoreSubjectRank?: { subjectCode?: string; percentile?: string }[] }[] }[] }[] } };
+type ScopusEntry = { openaccess?: string | null; oaAllowsAuthorPaid?: boolean | null; 'subject-area'?: { '@code'?: string; $?: string }[]; SNIPList?: { SNIP?: { $?: string }[] }; SJRList?: { SJR?: { $?: string }[] }; citeScoreYearInfoList?: { citeScoreCurrentMetric?: string; citeScoreCurrentMetricYear?: string; citeScoreYearInfo?: { '@year'?: string; citeScoreInformationList?: { citeScoreInfo?: { citeScoreSubjectRank?: { subjectCode?: string; percentile?: string }[] }[] }[] }[] } };
 export function parseScopusEntry(entry: ScopusEntry): Scopus {
   const info = entry.citeScoreYearInfoList; const year = info?.citeScoreCurrentMetricYear || null;
   const yearInfo = (info?.citeScoreYearInfo || []).find(y => y['@year'] === year);
@@ -81,7 +81,8 @@ export function parseScopusEntry(entry: ScopusEntry): Scopus {
   const best = ranks.map(r => ({ code: r.subjectCode, p: Number(r.percentile) })).filter(r => Number.isFinite(r.p)).sort((a, b) => b.p - a.p)[0];
   const subject = best ? (entry['subject-area'] || []).find(s => s['@code'] === best.code)?.$ || null : null;
   const n = (v: string | undefined) => v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
-  return { found: true, citeScore: n(info?.citeScoreCurrentMetric), year, snip: n(entry.SNIPList?.SNIP?.[0]?.$), sjr: n(entry.SJRList?.SJR?.[0]?.$), percentile: best?.p ?? null, quartile: percentileQuartile(best?.p ?? null), subject };
+  return { found: true, citeScore: n(info?.citeScoreCurrentMetric), year, snip: n(entry.SNIPList?.SNIP?.[0]?.$), sjr: n(entry.SJRList?.SJR?.[0]?.$), percentile: best?.p ?? null, quartile: percentileQuartile(best?.p ?? null), subject,
+    openAccess: entry.openaccess === '1' ? true : entry.openaccess === '0' ? false : null, authorPaidOA: typeof entry.oaAllowsAuthorPaid === 'boolean' ? entry.oaAllowsAuthorPaid : null };
 }
 async function fetchScopus(issn: string): Promise<Scopus | null> {
   const key = process.env.ELSEVIER_API_KEY; if (!key) return null;
@@ -116,7 +117,15 @@ async function scopusRecord(issns: string[]): Promise<Scopus | null> {
   return tried.length && notFound === tried.length ? { found: false, citeScore: null, year: null, snip: null, sjr: null, percentile: null, quartile: null, subject: null } : null;
 }
 
-export type OpenAlexMetricSource = { issn?: string[] | null; issn_l?: string | null; summary_stats?: { '2yr_mean_citedness'?: number; h_index?: number } | null; apc_usd?: number | null; is_in_doaj?: boolean | null };
+/** Publishing model from OpenAlex (is_oa, DOAJ, APC) and Scopus (open-access flag, paid OA option). */
+export function accessModel(s: { isOa?: boolean | null; inDoaj?: boolean | null; apcUsd?: number | null; scopusOpenAccess?: boolean | null; authorPaidOA?: boolean | null }): JournalMetrics['accessModel'] {
+  const fullyOpen = !!(s.isOa || s.inDoaj || s.scopusOpenAccess);
+  if (fullyOpen) return s.apcUsd === 0 ? 'open-access-free' : s.apcUsd != null && s.apcUsd > 0 ? 'open-access-apc' : s.inDoaj ? 'open-access-free' : 'open-access-apc';
+  if ((s.apcUsd != null && s.apcUsd > 0) || s.authorPaidOA) return 'hybrid';
+  if (s.isOa === false || s.scopusOpenAccess === false) return 'subscription';
+  return 'unknown';
+}
+export type OpenAlexMetricSource = { is_oa?: boolean | null; issn?: string[] | null; issn_l?: string | null; summary_stats?: { '2yr_mean_citedness'?: number; h_index?: number } | null; apc_usd?: number | null; is_in_doaj?: boolean | null };
 export async function journalMetrics(source: OpenAlexMetricSource): Promise<JournalMetrics> {
   const issns = [...new Set([source.issn_l, ...(source.issn || [])].filter(Boolean).map(i => normalizeIssn(String(i))))].filter(i => i.length === 8);
   const table = scimagoTable();
@@ -130,6 +139,7 @@ export async function journalMetrics(source: OpenAlexMetricSource): Promise<Jour
     citeScoreQuartile: sc?.quartile ?? null, citeScorePercentile: sc?.percentile ?? null, citeScoreSubject: sc?.subject ?? null,
     openAlexCitedness2y: source.summary_stats?.['2yr_mean_citedness'] != null ? Math.round(source.summary_stats['2yr_mean_citedness'] * 100) / 100 : null,
     openAlexHIndex: source.summary_stats?.h_index ?? null, apcUsd: source.apc_usd ?? null, inDoaj: source.is_in_doaj ?? null,
+    accessModel: accessModel({ isOa: source.is_oa, inDoaj: source.is_in_doaj, apcUsd: source.apc_usd, scopusOpenAccess: sc?.openAccess, authorPaidOA: sc?.authorPaidOA }),
   };
 }
 export const QUARTILE_ORDER: Record<string, number> = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
