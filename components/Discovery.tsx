@@ -42,8 +42,8 @@ export function useDiscovery() {
     } catch (e) { setErrors({ keywords: e instanceof Error ? e.message : 'Keyword step failed.' }); setStage('done'); return; }
     setKeywords(kw); setStage('searching');
     const journalBody = req.mode === 'field' ? { mode: 'field', fieldId: req.fieldId, fieldName: req.fieldName }
-      : req.mode === 'topic' ? { query: req.topic, title: req.topic, summary: req.abstract || undefined, phrases: kw.mode === 'ai' ? kw.phrases : undefined, keywords: kw.keywords }
-      : { query: req.manuscript.title, title: req.manuscript.title, summary: req.manuscript.summary, phrases: kw.mode === 'ai' ? kw.phrases : undefined, keywords: kw.keywords, studyType: req.manuscript.studyType };
+      : req.mode === 'topic' ? { query: req.topic, title: req.topic, summary: req.abstract || undefined, phrases: kw.mode === 'ai' ? kw.phrases : undefined, researchArea: kw.researchArea || undefined, keywords: kw.keywords }
+      : { query: req.manuscript.title, title: req.manuscript.title, summary: req.manuscript.summary, phrases: kw.mode === 'ai' ? kw.phrases : undefined, researchArea: kw.researchArea || undefined, keywords: kw.keywords, studyType: req.manuscript.studyType };
     await Promise.all([
       post<JournalResponse>('/api/journals', journalBody).then(r => { setJournals(r); loadPublisherMetrics(r); }).catch(e => setErrors(x => ({ ...x, journals: e instanceof Error ? e.message : 'Journal search failed.' }))),
       post<EventsResponse>('/api/events', { phrases: kw.phrases, keywords: kw.keywords, researchArea: kw.researchArea, csCategories: kw.csCategories, cfpTags: kw.cfpTags }).then(setEvents).catch(e => setErrors(x => ({ ...x, events: e instanceof Error ? e.message : 'Conference search failed.' }))),
@@ -118,7 +118,8 @@ export function DiscoveryResults({ discovery, fieldMode = false }: { discovery: 
         {errors.journals ? <div className="alert alert-danger"><AlertCircle size={17} />{errors.journals}</div> : null}
         {!journals && stage === 'searching' ? <div className="loading-state"><LoaderCircle className="spin" size={30} /><strong>Ranking journals</strong><p>{fieldMode ? 'Collecting journals dedicated to this field and their quartiles…' : 'Detecting your research topics, ranking journals by scope focus and adding quartiles and citation metrics…'}</p></div> : null}
         {journals ? <>
-          <div className="results-header"><div><h2>{journals.journals.length} journals</h2><p>{fieldMode ? journals.notice : <>Topic area: {journals.topics.join(' · ') || 'not detected'}{journals.mode === 'ai' ? ' · AI-refined ranking' : ''}</>}</p></div></div>
+          <div className="results-header"><div><h2>{journals.journals.length} journals</h2><p>{fieldMode ? journals.notice : <>{journals.domain ? <>Domain: {journals.domain} · </> : null}Topic area: {journals.topics.join(' · ') || 'not detected'}{journals.mode === 'ai' ? ' · AI-refined ranking' : ''}</>}</p></div></div>
+          {journals.broadenedTo ? <div className="alert alert-info"><Layers size={16} /> Few papers match your exact topic yet, so these results use the broader domain: <strong>{journals.broadenedTo}</strong>.</div> : null}
           {journals.aiError ? <div className="alert alert-warning"><AlertCircle size={17} /> AI ranking was unavailable ({journals.aiError}). Showing literature-based ranking.</div> : null}
           {publisher.status === 'loading' ? <div className="alert alert-info"><LoaderCircle className="spin" size={16} /> Looking up Impact Factor and CiteScore on publisher pages for the top {Math.min(20, journals.journals.length)} journals…</div> : publisher.status === 'error' ? <div className="alert alert-warning"><AlertCircle size={17} /> Impact Factor lookup unavailable ({publisher.error})</div> : null}
           <div className="filter-row">{QUARTILE_FILTERS.map(q => <button key={q} className={quartile === q ? 'selected' : ''} onClick={() => setQuartile(q)}>{q}</button>)}</div>

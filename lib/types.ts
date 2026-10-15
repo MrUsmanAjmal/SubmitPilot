@@ -28,7 +28,8 @@ export type Journal = {
   designEvidence:string; metrics:JournalMetrics; works:SampleWork[]; openalexUrl:string; aiFit:{score:number;reason:string}|null;
   reason:string; verification:string;
 };
-export type JournalResponse = { journals:Journal[]; searched:string; topics:string[]; sampledWorks:number; mode:'ai'|'rules'; aiError?:string; notice:string; metricsNote:string; error?:string };
+export type JournalResponse = { journals:Journal[]; searched:string; topics:string[]; sampledWorks:number; mode:'ai'|'rules'; aiError?:string; notice:string; metricsNote:string; error?:string;
+  /** Set when too few papers matched the exact topic and the whole domain was used instead. */ broadenedTo?:string; /** Main research domain the search was anchored to. */ domain?:string };
 export type DeadlineStatus = 'upcoming'|'passed'|'tba';
 export type ResearchEvent = {
   id:string; kind:'conference'|'workshop'; acronym:string; name:string; year:number|null; url:string|null;

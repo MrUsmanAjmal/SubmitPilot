@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { analyzeRules, inferStudyType, meaningfulWords, safeJsonExtract } from '../lib/analysis';
-import { buildSearchQuery,phraseQuery,scoreCandidates,topicProfile } from '../lib/journals';
+import { areaTerms,matchSubfield,buildSearchQuery,phraseBigrams,phraseQuery,scoreCandidates,topicProfile } from '../lib/journals';
+test('widens novel phrases into research-area terms and two-word pieces',()=>{assert.deepEqual(areaTerms('Computer vision - active perception and foveated vision'),['computer vision','active perception','foveated vision']);assert.ok(phraseBigrams(['foveated active vision']).includes('active vision'));assert.equal(matchSubfield('Computer vision')?.name,'Computer Vision and Pattern Recognition');assert.equal(matchSubfield('underwater basket weaving'),null);});
 import { DEMO_MANUSCRIPT } from '../lib/demo';
 test('detects qualitative and review designs',()=>{assert.equal(inferStudyType('A systematic review following PRISMA'),'Systematic review / meta-analysis');assert.equal(inferStudyType('Qualitative interviews with thematic analysis'),'Qualitative research');});
 test('analyzes sample without fabricated quality claims',()=>{const result=analyzeRules(DEMO_MANUSCRIPT,'sample.txt');assert.ok(result.wordCount>100);assert.equal(result.mode,'rules');assert.equal(result.studyType,'Observational research');assert.ok(result.checks.length>=7);});
