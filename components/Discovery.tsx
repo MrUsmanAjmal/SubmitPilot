@@ -81,6 +81,12 @@ export function TopicSearch({ onSearch, busy }: { onSearch: (topic: string, abst
   </form>;
 }
 
+/** Drops repeats (ignoring case) and anything already in `exclude`; AI keyword lists can repeat terms. */
+function uniqueTerms(terms: string[], exclude: string[] = []): string[] {
+  const seen = new Set(exclude.map(t => t.trim().toLowerCase()));
+  return terms.filter(t => { const key = t.trim().toLowerCase(); if (!key || seen.has(key)) return false; seen.add(key); return true; });
+}
+
 const STATUS_FILTERS: { id: 'all' | DeadlineStatus; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'upcoming', label: 'Open deadlines' }, { id: 'tba', label: 'Deadline not announced' }, { id: 'passed', label: 'Passed' }];
 const QUARTILE_FILTERS = ['All', 'Q1', 'Q2', 'Q3', 'Q4', 'Not indexed'];
 
@@ -100,7 +106,7 @@ export function DiscoveryResults({ discovery, fieldMode = false }: { discovery: 
     {errors.keywords ? <div className="alert alert-danger"><AlertCircle size={17} />{errors.keywords}</div> : null}
     {keywords ? <div className="keyword-panel">
       <div><span className="eyebrow">{keywords.mode === 'ai' ? <><Sparkles size={12} /> SEARCH KEYWORDS BY GEMINI</> : 'SEARCH KEYWORDS'}</span>{keywords.researchArea ? <strong>{keywords.researchArea}</strong> : null}</div>
-      <div className="tags">{keywords.phrases.map(p => <span key={p} className="tag-strong">{p}</span>)}{keywords.keywords.filter(k => !keywords.phrases.includes(k)).slice(0, 8).map(k => <span key={k}>{k}</span>)}</div>
+      <div className="tags">{uniqueTerms(keywords.phrases).map(p => <span key={`p-${p}`} className="tag-strong">{p}</span>)}{uniqueTerms(keywords.keywords, keywords.phrases).slice(0, 8).map(k => <span key={`k-${k}`}>{k}</span>)}</div>
       {keywords.aiError ? <p className="muted-note">AI keywords unavailable ({keywords.aiError}); used keywords from your text instead.</p> : null}
     </div> : null}
     {keywords ? <>
@@ -127,7 +133,7 @@ export function DiscoveryResults({ discovery, fieldMode = false }: { discovery: 
           {events.aiError ? <div className="alert alert-warning"><AlertCircle size={17} /> AI web search was unavailable ({events.aiError}). Showing curated and WikiCFP results only.</div> : null}
           <div className="filter-row">{STATUS_FILTERS.map(f => <button key={f.id} className={status === f.id ? 'selected' : ''} onClick={() => setStatus(f.id)}>{f.label} ({f.id === 'all' ? list.length : list.filter(e => e.status === f.id).length})</button>)}</div>
           {shownEvents.length ? <div className="journal-list">{shownEvents.map(e => <EventCard key={e.id} event={e} />)}</div> : <div className="empty-state"><CalendarClock size={24} /><strong>No {section} in this view</strong><p>{section === 'workshops' ? 'Workshops are announced late and are harder to find; check the main conferences in your area for co-located workshops.' : 'Try another filter or a broader topic.'}</p></div>}
-          {events.webSources.length ? <details className="web-sources"><summary>Web pages used by AI search ({events.webSources.length})</summary>{events.webSources.map(s => <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer">{s.title}</a>)}</details> : null}
+          {events.webSources.length ? <details className="web-sources"><summary>Web pages used by AI search ({events.webSources.length})</summary>{events.webSources.map((s, i) => <a key={`${i}-${s.url}`} href={s.url} target="_blank" rel="noopener noreferrer">{s.title}</a>)}</details> : null}
           <div className="research-disclaimer"><AlertCircle size={17} /><p>{events.notice}</p></div>
         </> : null}
       </div>}

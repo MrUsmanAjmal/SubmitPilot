@@ -67,10 +67,10 @@ export default function JournalCard({ journal, index, fieldMode = false, publish
       <span className="pill pill-green">{journal.fitLabel}</span>
       {fieldMode ? null : <span className="pill">{journal.focusPercent}% of output in your topic</span>}
       {m.inDoaj ? <span className="pill">Open access (DOAJ)</span> : journal.openAccess ? <span className="pill">Open access</span> : <span className="pill">Subscription / hybrid</span>}
-      {m.categories.map(c => <span className="pill" key={c}>{c}</span>)}
+      {[...new Set(m.categories)].map(c => <span className="pill" key={c}>{c}</span>)}
     </div>
     {expanded ? <div className="journal-expand">
-      {journal.scopeTopics.length ? <><div className="label-small">WHAT THIS JOURNAL PUBLISHES MOST</div><div className="tags">{journal.scopeTopics.map(t => <span key={t}>{t}</span>)}</div></> : null}
+      {journal.scopeTopics.length ? <><div className="label-small">WHAT THIS JOURNAL PUBLISHES MOST</div><div className="tags">{[...new Set(journal.scopeTopics)].map(t => <span key={t}>{t}</span>)}</div></> : null}
       {journal.works.length ? <><div className="label-small">EXAMPLE PUBLISHED WORKS</div>{journal.works.map((w, i) => <a className="work-link" href={w.url} key={`${w.title}${i}`} target="_blank" rel="noopener noreferrer"><span>{w.title} {w.year ? `(${w.year})` : ''}</span><ExternalLink size={13} /></a>)}</> : null}
       <div className="journal-warning"><ShieldAlert size={17} /><span>{journal.verification}</span></div>
     </div> : null}

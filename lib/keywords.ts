@@ -71,7 +71,8 @@ Return ONLY JSON: {"phrases": string[3-5], "keywords": string[6-10], "researchAr
 - cfpTags: 2-3 broad lowercase topic tags that calls for papers use, most specific first (e.g. "computer vision", "image processing", "pattern recognition").`,
       `<research>\n${describeInput(input)}\n</research>`, 500, true, 25000);
     const parsed = AIKeywords.parse(safeJsonExtract(reply));
-    return { phrases: parsed.phrases, keywords: parsed.keywords, researchArea: parsed.researchArea, csCategories: parsed.csCategories.filter(c => c in CS_CATEGORIES), cfpTags: parsed.cfpTags.map(t => t.toLowerCase()), mode: 'ai' };
+    const dedupe = (list: string[]) => [...new Map(list.map(t => [t.trim().toLowerCase(), t.trim()])).values()].filter(Boolean);
+    return { phrases: dedupe(parsed.phrases), keywords: dedupe(parsed.keywords), researchArea: parsed.researchArea, csCategories: parsed.csCategories.filter(c => c in CS_CATEGORIES), cfpTags: parsed.cfpTags.map(t => t.toLowerCase()), mode: 'ai' };
   } catch (e) {
     return { ...(await rulesKeywords(input)), aiError: e instanceof Error ? e.message : 'AI keyword step failed' };
   }
