@@ -1,5 +1,6 @@
 'use client';
 import type { Journal, PublisherMetrics } from '@/lib/types';
+import { FitCheck, type FitContext } from './FitReport';
 import { ArrowUpRight, BookOpen, ExternalLink, Check, Copy, LoaderCircle, ShieldAlert, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
@@ -39,7 +40,7 @@ function QuartileBadge({ q }: { q: string | null }) {
   return q ? <span className={`quartile quartile-${q.toLowerCase()}`} title="Best Scopus (SJR) quartile">{q}</span> : <span className="quartile quartile-none" title="No quartile found">No quartile</span>;
 }
 
-export default function JournalCard({ journal, index, fieldMode = false, publisher: p, publisherStatus = 'idle' }: { journal: Journal; index: number; fieldMode?: boolean; publisher?: PublisherMetrics; publisherStatus?: Status }) {
+export default function JournalCard({ journal, index, fieldMode = false, publisher: p, publisherStatus = 'idle', fitContext }: { journal: Journal; index: number; fieldMode?: boolean; publisher?: PublisherMetrics; publisherStatus?: Status; fitContext?: FitContext }) {
   const [expanded, setExpanded] = useState(false); const [copied, setCopied] = useState(false);
   const m = journal.metrics;
   const quartile = m.quartile || m.citeScoreQuartile || p?.scopusQuartile || null;
@@ -90,6 +91,7 @@ export default function JournalCard({ journal, index, fieldMode = false, publish
       {journal.works.length ? <><div className="label-small">EXAMPLE PUBLISHED WORKS</div>{journal.works.map((w, i) => <a className="work-link" href={w.url} key={`${w.title}${i}`} target="_blank" rel="noopener noreferrer"><span>{w.title} {w.year ? `(${w.year})` : ''}</span><ExternalLink size={13} /></a>)}</> : null}
       <div className="journal-warning"><ShieldAlert size={17} /><span>{journal.verification}</span></div>
     </div> : null}
+    <div className="fit-area"><FitCheck journal={journal} context={fitContext} /></div>
     <div className="journal-actions">
       <button className="text-btn" onClick={() => setExpanded(x => !x)}>{expanded ? 'Hide details' : 'Scope & example papers'} <ArrowUpRight size={15} /></button>
       <button className="text-btn subdued" onClick={copy}>{copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy details'}</button>

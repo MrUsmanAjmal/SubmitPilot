@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { AlertCircle, ArrowRight, BookMarked, CalendarClock, Layers, LoaderCircle, Presentation, Search, Sparkles, Users } from 'lucide-react';
 import JournalCard from './JournalCard';
 import EventCard from './EventCard';
+import type { FitContext } from './FitReport';
 import SUBFIELDS from '@/lib/data/subfields.json';
 import type { DeadlineStatus, EventsResponse, JournalResponse, PublisherMetrics } from '@/lib/types';
 
@@ -90,7 +91,7 @@ function uniqueTerms(terms: string[], exclude: string[] = []): string[] {
 const STATUS_FILTERS: { id: 'all' | DeadlineStatus; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'upcoming', label: 'Open deadlines' }, { id: 'tba', label: 'Deadline not announced' }, { id: 'passed', label: 'Passed' }];
 const QUARTILE_FILTERS = ['All', 'Q1', 'Q2', 'Q3', 'Q4', 'Not indexed'];
 
-export function DiscoveryResults({ discovery, fieldMode = false }: { discovery: ReturnType<typeof useDiscovery>; fieldMode?: boolean }) {
+export function DiscoveryResults({ discovery, fieldMode = false, fitContext }: { discovery: ReturnType<typeof useDiscovery>; fieldMode?: boolean; fitContext?: FitContext }) {
   const { keywords, journals, events, stage, errors, publisher } = discovery;
   const [section, setSection] = useState<Section>('journals');
   const [quartile, setQuartile] = useState('All');
@@ -123,7 +124,7 @@ export function DiscoveryResults({ discovery, fieldMode = false }: { discovery: 
           {journals.aiError ? <div className="alert alert-warning"><AlertCircle size={17} /> AI ranking was unavailable ({journals.aiError}). Showing literature-based ranking.</div> : null}
           {publisher.status === 'loading' ? <div className="alert alert-info"><LoaderCircle className="spin" size={16} /> Looking up Impact Factor and CiteScore on publisher pages for the top {Math.min(20, journals.journals.length)} journals…</div> : publisher.status === 'error' ? <div className="alert alert-warning"><AlertCircle size={17} /> Impact Factor lookup unavailable ({publisher.error})</div> : null}
           <div className="filter-row">{QUARTILE_FILTERS.map(q => <button key={q} className={quartile === q ? 'selected' : ''} onClick={() => setQuartile(q)}>{q}</button>)}</div>
-          {shownJournals.length ? <div className="journal-list">{shownJournals.map((j, i) => <JournalCard key={j.id} journal={j} index={i} fieldMode={fieldMode} publisher={publisher.metrics[j.id]} publisherStatus={publisher.status} />)}</div> : <div className="empty-state"><BookMarked size={24} /><strong>No journals in this view</strong><p>{quartile !== 'All' ? 'Try another quartile filter.' : 'Try a broader or more specific topic.'}</p></div>}
+          {shownJournals.length ? <div className="journal-list">{shownJournals.map((j, i) => <JournalCard key={j.id} journal={j} index={i} fieldMode={fieldMode} publisher={publisher.metrics[j.id]} publisherStatus={publisher.status} fitContext={fitContext && { ...fitContext, phrases: fitContext.phrases || keywords?.phrases, keywords: fitContext.keywords || keywords?.keywords }} />)}</div> : <div className="empty-state"><BookMarked size={24} /><strong>No journals in this view</strong><p>{quartile !== 'All' ? 'Try another quartile filter.' : 'Try a broader or more specific topic.'}</p></div>}
           <div className="research-disclaimer"><AlertCircle size={17} /><p><strong>About these numbers.</strong> {journals.metricsNote} {fieldMode ? '' : journals.notice}</p></div>
         </> : null}
       </div> : <div>

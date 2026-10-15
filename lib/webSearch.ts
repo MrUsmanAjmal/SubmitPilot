@@ -6,7 +6,12 @@
  */
 
 export type SearchResult = { title: string; url: string; text: string; provider: string };
-export type SearchOptions = { /** Provider ids to try first, e.g. ['tavily'] when full page text matters. */ prefer?: string[]; /** Ask for full page text where the provider supports it (Tavily). */ fullText?: boolean };
+export type SearchOptions = {
+  /** Provider ids to try first, e.g. ['tavily'] when full page text matters. */ prefer?: string[];
+  /** Ask for full page text where the provider supports it (Tavily). */ fullText?: boolean;
+  /** Longest page text to keep with fullText (default 6000 characters). */ maxChars?: number;
+  /** Only return pages from these sites (e.g. a publisher's domain). */ domains?: string[];
+};
 type Provider = { id: string; label: string; envKey: string; search: (key: string, query: string, max: number, signal: AbortSignal, opts: SearchOptions) => Promise<SearchResult[]> };
 
 class QuotaError extends Error { constructor(message: string, public pauseMs: number) { super(message); } }
@@ -28,8 +33,8 @@ export const PROVIDERS: Provider[] = [
     return (body.organic || []).map(r => ({ title: clip(r.title, 200), url: r.link || '', text: clip(r.snippet), provider: 'Serper' }));
   } },
   { id: 'tavily', label: 'Tavily', envKey: 'TAVILY_API_KEY', search: async (key, query, max, signal, opts) => {
-    const body = await call('https://api.tavily.com/search', { method: 'POST', signal, headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ query, max_results: max, search_depth: 'basic', ...(opts.fullText ? { include_raw_content: 'text' } : {}) }) }, 'Tavily') as { results?: { title?: string; url?: string; content?: string; raw_content?: string | null }[] };
-    return (body.results || []).map(r => ({ title: clip(r.title, 200), url: r.url || '', text: opts.fullText && r.raw_content ? clip(r.raw_content, 6000) : clip(r.content), provider: 'Tavily' }));
+    const body = await call('https://api.tavily.com/search', { method: 'POST', signal, headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ query, max_results: max, search_depth: 'basic', ...(opts.fullText ? { include_raw_content: 'text' } : {}), ...(opts.domains?.length ? { include_domains: opts.domains } : {}) }) }, 'Tavily') as { results?: { title?: string; url?: string; content?: string; raw_content?: string | null }[] };
+    return (body.results || []).map(r => ({ title: clip(r.title, 200), url: r.url || '', text: opts.fullText && r.raw_content ? clip(r.raw_content, opts.maxChars || 6000) : clip(r.content), provider: 'Tavily' }));
   } },
   { id: 'brave', label: 'Brave Search', envKey: 'BRAVE_API_KEY', search: async (key, query, max, signal) => {
     const body = await call(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${max}&extra_snippets=true`, { signal, headers: { Accept: 'application/json', 'X-Subscription-Token': key } }, 'Brave') as { web?: { results?: { title?: string; url?: string; description?: string; extra_snippets?: string[] }[] } };
@@ -58,7 +63,7 @@ export function webSearchStatus(): { provider: string; state: 'ready' | 'paused'
 const cache = new Map<string, { at: number; value: SearchResult[] }>();
 /** Searches with the first available provider; falls through to the next on quota or errors. */
 export async function webSearch(query: string, max = 5, opts: SearchOptions = {}): Promise<SearchResult[]> {
-  const key = `${max}:${opts.fullText ? 'full:' : ''}${query.toLowerCase()}`;
+  const key = `${max}:${opts.fullText ? `full${opts.maxChars || ''}:` : ''}${(opts.domains || []).join(',')}:${query.toLowerCase()}`;
   const hit = cache.get(key); if (hit && Date.now() - hit.at < 6 * HOUR) return hit.value;
   const errors: string[] = [];
   const prefer = opts.prefer || [];
@@ -67,7 +72,9 @@ export async function webSearch(query: string, max = 5, opts: SearchOptions = {}
     const pause = pausedUntil.get(p.id); if (pause && pause.until > Date.now()) continue;
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const results = (await p.search(process.env[p.envKey] || '', query, max, controller.signal, opts)).filter(r => /^https?:\/\//.test(r.url));
+      // Tavily takes a domain list; the others understand Google-style site: operators in the query.
+      const q = opts.domains?.length && p.id !== 'tavily' ? `${query} (${opts.domains.map(d => `site:${d}`).join(' OR ')})` : query;
+      const results = (await p.search(process.env[p.envKey] || '', q, max, controller.signal, opts)).filter(r => /^https?:\/\//.test(r.url));
       cache.set(key, { at: Date.now(), value: results });
       return results;
     } catch (e) {

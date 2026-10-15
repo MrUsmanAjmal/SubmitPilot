@@ -4,6 +4,7 @@ import { parseScimago, normalizeIssn, parseScopusEntry, percentileQuartile } fro
 import { ccfToEvent, parseDeadline, parseWikicfp, relevance, statusOf } from '../lib/events';
 import { expiryFor, parsePublisherMetrics, verifyAgainstResults } from '../lib/impact';
 import { accessModel } from '../lib/metrics';
+import { keywordsOf, measure } from '../lib/fitCheck';
 
 test('parses the SCImago CSV with decimal commas and multiple ISSNs', () => {
   const csv = 'Rank;Sourceid;Title;Type;Issn;SJR;SJR Best Quartile;H index;Citations / Doc. (2years);Categories\n' +
@@ -92,6 +93,20 @@ test('classifies hybrid, open-access and free-to-publish journals', () => {
   assert.equal(accessModel({ isOa: true, inDoaj: true, apcUsd: 2382 }), 'open-access-apc');
   assert.equal(accessModel({ isOa: true, inDoaj: true, apcUsd: 0 }), 'open-access-free');
   assert.equal(accessModel({ isOa: false, apcUsd: null }), 'subscription');
+});
+
+test('fit check measures length, abstract, keywords and required statements against the guidelines', () => {
+  const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+  const text = `My Title\n\nAbstract\n${words(300)}\n\nKeywords: tracking; vision; memory\n\n1. Introduction\n${words(5000)}\n\nDeclaration of competing interest\nNone.\n\nReferences\n[1] A. Author, Paper, 2020.\n[2] B. Author, Paper, 2021.\n`;
+  const g = { articleTypes: [{ name: 'Regular manuscripts', wordLimit: 4500, abstractLimit: 250, pageLimit: null, figureLimit: null, referenceLimit: null }], abstractMaxWords: 250, structuredAbstract: null, keywordsMin: 1, keywordsMax: 7, requiredSections: [], requiredStatements: ['Declaration of competing interest', 'Data availability'], highlights: true, graphicalAbstract: null, referenceStyle: null, reviewType: null, otherRequirements: [], aimsAndScope: null, sourceUrl: 'https://example.org', checkedAt: '' };
+  const m = Object.fromEntries(measure(text, g, 'manuscript').map(x => [x.item, x.status]));
+  assert.equal(m['Length (Regular manuscripts)'], 'exceeds');
+  assert.equal(m['Abstract length'], 'exceeds');
+  assert.equal(m['Keywords'], 'present');
+  assert.equal(m['Highlights'], 'missing');
+  assert.equal(m['Declaration of competing interest'], 'present');
+  assert.equal(m['Data availability'], 'missing');
+  assert.deepEqual(keywordsOf(text), ['tracking', 'vision', 'memory']);
 });
 
 test('relevance rewards full phrase matches', () => {

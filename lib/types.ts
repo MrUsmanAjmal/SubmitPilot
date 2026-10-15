@@ -21,6 +21,26 @@ export type PublisherMetrics = {
   impactFactor:number|null; impactFactorYear:string|null; citeScore:number|null; citeScoreYear:string|null;
   scopusQuartile:'Q1'|'Q2'|'Q3'|'Q4'|null; jcrQuartile:'Q1'|'Q2'|'Q3'|'Q4'|null; sourceUrl:string|null; checkedAt:string;
 };
+/** Submission requirements read from a journal's official author guidelines; null = not stated. */
+export type JournalGuidelines = {
+  articleTypes:{name:string;wordLimit:number|null;abstractLimit:number|null;pageLimit:number|null;figureLimit:number|null;referenceLimit:number|null}[];
+  abstractMaxWords:number|null; structuredAbstract:boolean|null; keywordsMin:number|null; keywordsMax:number|null;
+  requiredSections:string[]; requiredStatements:string[]; highlights:boolean|null; graphicalAbstract:boolean|null;
+  referenceStyle:string|null; reviewType:string|null; otherRequirements:string[]; aimsAndScope:string|null; sourceUrl:string; checkedAt:string;
+};
+export type CheckStatus = 'present'|'missing'|'partial'|'exceeds'|'unclear';
+export type FitReport = {
+  journal:{id:string;name:string}; mode:'manuscript'|'abstract'; guidelines:JournalGuidelines|null; guidelinesError?:string;
+  deskRejectionRisk:'low'|'medium'|'high'; readinessSummary:string;
+  /** Measured in code (counts, required statements found by text search). */
+  measured:{item:string;status:CheckStatus;detail:string;fix?:string}[];
+  /** Judged by the AI from the manuscript text. */
+  structure:{item:string;status:CheckStatus;detail:string;fix?:string}[];
+  scopeFit:{level:'strong'|'moderate'|'weak';reason:string};
+  novelty:{level:'clear'|'unclear'|'weak';reason:string;overlaps:{title:string;year:number|null;url:string|null;why:string}[]};
+  rejectionRisks:{reason:string;severity:'high'|'medium'|'low';evidence:string;fix:string}[];
+  strengths:string[]; notice:string;
+};
 export type SampleWork = { title:string; year:number | null; doi:string | null; url:string; type:string };
 export type Journal = {
   id:string; name:string; issn:string|null; publisher:string|null; openAccess:boolean|null; homepage:string|null;

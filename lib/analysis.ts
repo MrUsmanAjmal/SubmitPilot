@@ -79,5 +79,13 @@ export function extractJsonList(text: string, key: string): unknown[] {
 }
 export function safeJsonExtract(raw:string):unknown {
   const cleaned=raw.replace(/^\s*```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'');
-  try { return JSON.parse(cleaned); } catch { const start=cleaned.indexOf('{');const end=cleaned.lastIndexOf('}');if(start>=0&&end>start) return JSON.parse(cleaned.slice(start,end+1)); throw new Error('Invalid JSON from model');}
+  try { return JSON.parse(cleaned); } catch { const start=cleaned.indexOf('{');const end=cleaned.lastIndexOf('}');if(start>=0&&end>start) return parseLenient(cleaned.slice(start,end+1)); throw new Error('Invalid JSON from model');}
+}
+/** Model JSON often has trailing commas or // comments; strip them before giving up. */
+function parseLenient(s:string):unknown {
+  try { return JSON.parse(s); } catch { return JSON.parse(s.replace(/\/\/[^\n"]*$/gm,'').replace(/,\s*([}\]])/g,'$1')); }
+}
+/** Asks the model again once when its reply cannot be parsed; free models occasionally emit broken JSON. */
+export async function withJsonRetry<T>(ask:()=>Promise<string>,parse:(reply:string)=>T):Promise<T> {
+  try { return parse(await ask()); } catch { return parse(await ask()); }
 }

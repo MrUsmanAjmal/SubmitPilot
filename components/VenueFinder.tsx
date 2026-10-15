@@ -8,6 +8,7 @@ export default function VenueFinder() {
   const [mode, setMode] = useState<'field' | 'topic'>('topic');
   const [searchedMode, setSearchedMode] = useState<'field' | 'topic'>('topic');
   const discovery = useDiscovery();
+  const [lastTopic, setLastTopic] = useState<{ topic: string; abstract: string } | null>(null);
   const busy = discovery.stage === 'keywords' || discovery.stage === 'searching';
   return <div className="explorer">
     <div className="tab-toggle">
@@ -16,7 +17,7 @@ export default function VenueFinder() {
     </div>
     {mode === 'field'
       ? <FieldSearch busy={busy} onSearch={(id, name) => { setSearchedMode('field'); void discovery.run({ mode: 'field', fieldId: id, fieldName: name }); }} />
-      : <TopicSearch busy={busy} onSearch={(topic, abstract) => { setSearchedMode('topic'); void discovery.run({ mode: 'topic', topic, abstract }); }} />}
-    <DiscoveryResults key={searchedMode} discovery={discovery} fieldMode={searchedMode === 'field'} />
+      : <TopicSearch busy={busy} onSearch={(topic, abstract) => { setSearchedMode('topic'); setLastTopic({ topic, abstract }); void discovery.run({ mode: 'topic', topic, abstract }); }} />}
+    <DiscoveryResults key={searchedMode} discovery={discovery} fieldMode={searchedMode === 'field'} fitContext={searchedMode === 'topic' && lastTopic && lastTopic.abstract.length >= 100 ? { mode: 'abstract', title: lastTopic.topic, text: lastTopic.abstract } : undefined} />
   </div>;
 }
