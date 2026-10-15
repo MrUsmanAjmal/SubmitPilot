@@ -19,7 +19,7 @@ async function withTimeout<T>(ms: number, run: (signal: AbortSignal) => Promise<
 }
 
 async function askGemini(system: string, user: string, maxTokens: number, json: boolean, signal: AbortSignal): Promise<string> {
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST', signal,
     headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY || '' },
@@ -59,10 +59,13 @@ export async function askAI(system: string, user: string, maxTokens = 1200, json
 }
 
 export type WebSource = { title: string; url: string };
+let webSearchBlockedUntil = 0;
+export const WEB_SEARCH_UNAVAILABLE = 'Google Search grounding is not available on this Gemini key (the free tier often excludes it). Enable billing for the key in Google AI Studio to use it.';
 /** Gemini with Google Search grounding. Returns the reply text and the web pages it relied on. */
 export async function askAIWithWebSearch(system: string, user: string, maxTokens = 3000, timeoutMs = 45000): Promise<{ text: string; sources: WebSource[] }> {
   if (aiProvider() !== 'gemini') throw new Error('Web search requires GEMINI_API_KEY.');
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  if (Date.now() < webSearchBlockedUntil) throw new Error(WEB_SEARCH_UNAVAILABLE);
+  const model = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
   return withTimeout(timeoutMs, async signal => {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST', signal,
@@ -74,7 +77,8 @@ export async function askAIWithWebSearch(system: string, user: string, maxTokens
         generationConfig: { temperature: 0, maxOutputTokens: Math.max(maxTokens * 4, 8192) },
       }),
     });
-    if (!response.ok) throw new Error(`Gemini web search failed (${response.status}).${response.status === 429 ? ' The free quota is exhausted for now.' : ''}`);
+    if (response.status === 429) { webSearchBlockedUntil = Date.now() + 30 * 60e3; throw new Error(WEB_SEARCH_UNAVAILABLE); }
+    if (!response.ok) throw new Error(`Gemini web search failed (${response.status}).`);
     const data = await response.json() as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] } }[] };
     const candidate = data.candidates?.[0];
     const text = (candidate?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('\n').trim();

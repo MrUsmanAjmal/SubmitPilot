@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseScimago, normalizeIssn } from '../lib/metrics';
+import { parseScimago, normalizeIssn, parseScopusEntry, percentileQuartile } from '../lib/metrics';
 import { ccfToEvent, parseDeadline, parseWikicfp, relevance, statusOf } from '../lib/events';
+import { parsePublisherMetrics } from '../lib/impact';
 
 test('parses the SCImago CSV with decimal commas and multiple ISSNs', () => {
   const csv = 'Rank;Sourceid;Title;Type;Issn;SJR;SJR Best Quartile;H index;Citations / Doc. (2years);Categories\n' +
@@ -44,6 +45,29 @@ test('parses WikiCFP rows and recognises co-located workshops', () => {
   const [e] = parseWikicfp(html, Date.UTC(2026, 9, 16));
   assert.equal(e.kind, 'workshop'); assert.equal(e.acronym, 'CVPath@WACV'); assert.equal(e.year, 2027);
   assert.equal(e.location, 'Orlando, USA'); assert.equal(e.status, 'upcoming'); assert.ok(e.abstractDeadline);
+});
+
+test('derives the Scopus CiteScore quartile from the best subject percentile', () => {
+  const s = parseScopusEntry({
+    'subject-area': [{ '@code': '1711', $: 'Signal Processing' }, { '@code': '1707', $: 'Computer Vision and Pattern Recognition' }],
+    SJRList: { SJR: [{ $: '0.881' }] }, SNIPList: { SNIP: [{ $: '1.314' }] },
+    citeScoreYearInfoList: { citeScoreCurrentMetric: '7.7', citeScoreCurrentMetricYear: '2025', citeScoreYearInfo: [
+      { '@year': '2026', citeScoreInformationList: [{ citeScoreInfo: [{ citeScoreSubjectRank: [{ subjectCode: '1711', percentile: '99' }] }] }] },
+      { '@year': '2025', citeScoreInformationList: [{ citeScoreInfo: [{ citeScoreSubjectRank: [{ subjectCode: '1711', percentile: '88' }, { subjectCode: '1707', percentile: '84' }] }] }] }] },
+  });
+  assert.equal(s.citeScore, 7.7); assert.equal(s.year, '2025'); assert.equal(s.sjr, 0.881);
+  assert.equal(s.percentile, 88); assert.equal(s.quartile, 'Q1'); assert.equal(s.subject, 'Signal Processing');
+  assert.equal(percentileQuartile(50), 'Q2'); assert.equal(percentileQuartile(24), 'Q4');
+});
+
+test('keeps only well-formed publisher metrics for requested journals', () => {
+  const text = 'Here you go:\n[{"id":"S177430994","impactFactor":5.0,"impactFactorYear":"2024","citeScore":7.7,"citeScoreYear":2024,"scopusQuartile":"Q1","jcrQuartile":null,"sourceUrl":"https://www.sciencedirect.com/journal/image-and-vision-computing"},' +
+    '{"id":"S999","impactFactor":9.9},{"id":"S414566","impactFactor":null,"citeScore":null,"sourceUrl":"not a url"}]';
+  const map = parsePublisherMetrics(text, ['S177430994', 'S414566']);
+  const ivc = map.get('S177430994');
+  assert.equal(ivc?.impactFactor, 5); assert.equal(ivc?.citeScore, 7.7); assert.equal(ivc?.scopusQuartile, 'Q1'); assert.equal(ivc?.impactFactorYear, '2024');
+  assert.equal(map.has('S999'), false);
+  assert.equal(map.get('S414566')?.impactFactor, null); assert.equal(map.get('S414566')?.sourceUrl, null);
 });
 
 test('relevance rewards full phrase matches', () => {

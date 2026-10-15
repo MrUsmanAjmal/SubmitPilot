@@ -10,7 +10,13 @@ export type JournalMetrics = {
   quartile:'Q1'|'Q2'|'Q3'|'Q4'|null; indexed:'scopus'|'not-indexed'|'unknown';
   sjr:number|null; scimagoHIndex:number|null; citesPerDoc2y:number|null; categories:string[];
   citeScore:number|null; citeScoreYear:string|null; snip:number|null;
+  citeScoreQuartile:'Q1'|'Q2'|'Q3'|'Q4'|null; citeScorePercentile:number|null; citeScoreSubject:string|null;
   openAlexCitedness2y:number|null; openAlexHIndex:number|null; apcUsd:number|null; inDoaj:boolean|null;
+};
+/** Impact Factor and CiteScore as displayed by the publisher, found by AI web search with a source link. */
+export type PublisherMetrics = {
+  impactFactor:number|null; impactFactorYear:string|null; citeScore:number|null; citeScoreYear:string|null;
+  scopusQuartile:'Q1'|'Q2'|'Q3'|'Q4'|null; jcrQuartile:'Q1'|'Q2'|'Q3'|'Q4'|null; sourceUrl:string|null; checkedAt:string;
 };
 export type SampleWork = { title:string; year:number | null; doi:string | null; url:string; type:string };
 export type Journal = {

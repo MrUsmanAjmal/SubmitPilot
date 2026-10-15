@@ -4,7 +4,7 @@ import { AlertCircle, ArrowRight, BookMarked, CalendarClock, Layers, LoaderCircl
 import JournalCard from './JournalCard';
 import EventCard from './EventCard';
 import SUBFIELDS from '@/lib/data/subfields.json';
-import type { DeadlineStatus, EventsResponse, JournalResponse } from '@/lib/types';
+import type { DeadlineStatus, EventsResponse, JournalResponse, PublisherMetrics } from '@/lib/types';
 
 export type Keywords = { phrases: string[]; keywords: string[]; researchArea: string; csCategories: string[]; cfpTags: string[]; mode: 'ai' | 'rules'; aiError?: string };
 export type ManuscriptContext = { title: string; summary: string; keywords: string[]; text: string; studyType: string };
@@ -25,8 +25,17 @@ export function useDiscovery() {
   const [events, setEvents] = useState<EventsResponse | null>(null);
   const [stage, setStage] = useState<'idle' | 'keywords' | 'searching' | 'done'>('idle');
   const [errors, setErrors] = useState<{ keywords?: string; journals?: string; events?: string }>({});
+  const [publisher, setPublisher] = useState<{ status: 'idle' | 'loading' | 'done' | 'error'; metrics: Record<string, PublisherMetrics>; error?: string }>({ status: 'idle', metrics: {} });
+  /** Impact Factor and CiteScore load after the list, so journals appear without waiting for the web search. */
+  function loadPublisherMetrics(res: JournalResponse) {
+    const top = res.journals.slice(0, 20); if (!top.length) return;
+    setPublisher({ status: 'loading', metrics: {} });
+    post<{ metrics: Record<string, PublisherMetrics> }>('/api/journal-metrics', { journals: top.map(j => ({ id: j.id, name: j.name, issn: j.issn, publisher: j.publisher, homepage: j.homepage })) })
+      .then(r => setPublisher({ status: 'done', metrics: r.metrics }))
+      .catch(e => setPublisher({ status: 'error', metrics: {}, error: e instanceof Error ? e.message : 'Lookup failed.' }));
+  }
   async function run(req: Request) {
-    setKeywords(null); setJournals(null); setEvents(null); setErrors({}); setStage('keywords');
+    setKeywords(null); setJournals(null); setEvents(null); setErrors({}); setPublisher({ status: 'idle', metrics: {} }); setStage('keywords');
     let kw: Keywords;
     try {
       kw = await post<Keywords>('/api/keywords', req.mode === 'field' ? { mode: 'field', field: req.fieldName } : req.mode === 'topic' ? { mode: 'topic', topic: req.topic, abstract: req.abstract } : { mode: 'manuscript', title: req.manuscript.title, text: req.manuscript.text });
@@ -36,12 +45,12 @@ export function useDiscovery() {
       : req.mode === 'topic' ? { query: req.topic, title: req.topic, summary: req.abstract || undefined, phrases: kw.mode === 'ai' ? kw.phrases : undefined, keywords: kw.keywords }
       : { query: req.manuscript.title, title: req.manuscript.title, summary: req.manuscript.summary, phrases: kw.mode === 'ai' ? kw.phrases : undefined, keywords: kw.keywords, studyType: req.manuscript.studyType };
     await Promise.all([
-      post<JournalResponse>('/api/journals', journalBody).then(setJournals).catch(e => setErrors(x => ({ ...x, journals: e instanceof Error ? e.message : 'Journal search failed.' }))),
+      post<JournalResponse>('/api/journals', journalBody).then(r => { setJournals(r); loadPublisherMetrics(r); }).catch(e => setErrors(x => ({ ...x, journals: e instanceof Error ? e.message : 'Journal search failed.' }))),
       post<EventsResponse>('/api/events', { phrases: kw.phrases, keywords: kw.keywords, researchArea: kw.researchArea, csCategories: kw.csCategories, cfpTags: kw.cfpTags }).then(setEvents).catch(e => setErrors(x => ({ ...x, events: e instanceof Error ? e.message : 'Conference search failed.' }))),
     ]);
     setStage('done');
   }
-  return { keywords, journals, events, stage, errors, run };
+  return { keywords, journals, events, stage, errors, publisher, run };
 }
 
 export function FieldSearch({ onSearch, busy }: { onSearch: (id: string, name: string) => void; busy: boolean }) {
@@ -76,12 +85,13 @@ const STATUS_FILTERS: { id: 'all' | DeadlineStatus; label: string }[] = [{ id: '
 const QUARTILE_FILTERS = ['All', 'Q1', 'Q2', 'Q3', 'Q4', 'Not indexed'];
 
 export function DiscoveryResults({ discovery, fieldMode = false }: { discovery: ReturnType<typeof useDiscovery>; fieldMode?: boolean }) {
-  const { keywords, journals, events, stage, errors } = discovery;
+  const { keywords, journals, events, stage, errors, publisher } = discovery;
   const [section, setSection] = useState<Section>('journals');
   const [quartile, setQuartile] = useState('All');
   const [status, setStatus] = useState<'all' | DeadlineStatus>('all');
   if (stage === 'idle') return null;
-  const shownJournals = (journals?.journals || []).filter(j => quartile === 'All' || (quartile === 'Not indexed' ? j.metrics.indexed === 'not-indexed' : j.metrics.quartile === quartile));
+  const quartileOf = (j: JournalResponse['journals'][number]) => j.metrics.quartile || j.metrics.citeScoreQuartile || publisher.metrics[j.id]?.scopusQuartile || null;
+  const shownJournals = (journals?.journals || []).filter(j => quartile === 'All' || (quartile === 'Not indexed' ? !quartileOf(j) && j.metrics.indexed !== 'scopus' && publisher.metrics[j.id]?.impactFactor == null && (j.metrics.indexed === 'not-indexed' || publisher.status === 'done') : quartileOf(j) === quartile));
   const list = section === 'conferences' ? events?.conferences || [] : events?.workshops || [];
   const shownEvents = list.filter(e => status === 'all' || e.status === status);
   const count = (s: Section) => s === 'journals' ? journals?.journals.length : s === 'conferences' ? events?.conferences.length : events?.workshops.length;
@@ -104,8 +114,9 @@ export function DiscoveryResults({ discovery, fieldMode = false }: { discovery: 
         {journals ? <>
           <div className="results-header"><div><h2>{journals.journals.length} journals</h2><p>{fieldMode ? journals.notice : <>Topic area: {journals.topics.join(' · ') || 'not detected'}{journals.mode === 'ai' ? ' · AI-refined ranking' : ''}</>}</p></div></div>
           {journals.aiError ? <div className="alert alert-warning"><AlertCircle size={17} /> AI ranking was unavailable ({journals.aiError}). Showing literature-based ranking.</div> : null}
+          {publisher.status === 'loading' ? <div className="alert alert-info"><LoaderCircle className="spin" size={16} /> Looking up Impact Factor and CiteScore on publisher pages for the top {Math.min(20, journals.journals.length)} journals…</div> : publisher.status === 'error' ? <div className="alert alert-warning"><AlertCircle size={17} /> Impact Factor lookup unavailable ({publisher.error})</div> : null}
           <div className="filter-row">{QUARTILE_FILTERS.map(q => <button key={q} className={quartile === q ? 'selected' : ''} onClick={() => setQuartile(q)}>{q}</button>)}</div>
-          {shownJournals.length ? <div className="journal-list">{shownJournals.map((j, i) => <JournalCard key={j.id} journal={j} index={i} fieldMode={fieldMode} />)}</div> : <div className="empty-state"><BookMarked size={24} /><strong>No journals in this view</strong><p>{quartile !== 'All' ? 'Try another quartile filter.' : 'Try a broader or more specific topic.'}</p></div>}
+          {shownJournals.length ? <div className="journal-list">{shownJournals.map((j, i) => <JournalCard key={j.id} journal={j} index={i} fieldMode={fieldMode} publisher={publisher.metrics[j.id]} publisherStatus={publisher.status} />)}</div> : <div className="empty-state"><BookMarked size={24} /><strong>No journals in this view</strong><p>{quartile !== 'All' ? 'Try another quartile filter.' : 'Try a broader or more specific topic.'}</p></div>}
           <div className="research-disclaimer"><AlertCircle size={17} /><p><strong>About these numbers.</strong> {journals.metricsNote} {fieldMode ? '' : journals.notice}</p></div>
         </> : null}
       </div> : <div>

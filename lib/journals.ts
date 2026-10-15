@@ -260,8 +260,9 @@ export async function journalsByField(subfieldId: string, subfieldName: string):
     ...toJournal(r, metrics[i], [], null, `${Math.round(r.focus * 100)}% of its articles since ${since} are in ${subfieldName} (${r.topicWorks.toLocaleString('en-US')} articles).`),
     fitLabel: r.focus >= 0.6 ? 'Core journal of this field' : r.focus >= 0.35 ? 'Major focus on this field' : 'Regularly publishes this field',
   }));
-  const impact = (j: Journal) => j.metrics.sjr ?? j.metrics.citeScore ?? j.metrics.openAlexCitedness2y ?? 0;
-  list.sort((a, b) => (QUARTILE_ORDER[a.metrics.quartile || ''] || 9) - (QUARTILE_ORDER[b.metrics.quartile || ''] || 9) || impact(b) - impact(a));
+  const impact = (j: Journal) => j.metrics.citeScore ?? j.metrics.sjr ?? j.metrics.openAlexCitedness2y ?? 0;
+  const q = (j: Journal) => QUARTILE_ORDER[j.metrics.quartile || j.metrics.citeScoreQuartile || ''] || 9;
+  list.sort((a, b) => q(a) - q(b) || impact(b) - impact(a));
   return {
     journals: list.slice(0, 60), searched: subfieldName, topics: [subfieldName], sampledWorks: [...counts.values()].reduce((a, b) => a + b, 0), mode: 'rules', metricsNote: metricsNote(),
     notice: `Journals where at least 20% of articles since ${since} are in ${subfieldName}, ordered by quartile and then impact. Multidisciplinary journals that publish this field only occasionally are excluded.`,

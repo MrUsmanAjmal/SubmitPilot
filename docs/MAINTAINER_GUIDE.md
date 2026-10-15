@@ -38,7 +38,7 @@ Open `.env.local` and set:
 
 ```env
 GEMINI_API_KEY=your_free_google_ai_studio_key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-flash-lite-latest
 AI_REQUESTS_PER_HOUR=30
 OPENALEX_API_KEY=your_free_openalex_key
 ELSEVIER_API_KEY=your_scopus_key_optional
