@@ -6,7 +6,8 @@
  */
 
 export type SearchResult = { title: string; url: string; text: string; provider: string };
-type Provider = { id: string; label: string; envKey: string; search: (key: string, query: string, max: number, signal: AbortSignal) => Promise<SearchResult[]> };
+export type SearchOptions = { /** Provider ids to try first, e.g. ['tavily'] when full page text matters. */ prefer?: string[]; /** Ask for full page text where the provider supports it (Tavily). */ fullText?: boolean };
+type Provider = { id: string; label: string; envKey: string; search: (key: string, query: string, max: number, signal: AbortSignal, opts: SearchOptions) => Promise<SearchResult[]> };
 
 class QuotaError extends Error { constructor(message: string, public pauseMs: number) { super(message); } }
 const HOUR = 3600e3, DAY = 24 * HOUR;
@@ -22,13 +23,13 @@ async function call(url: string, init: RequestInit & { signal: AbortSignal }, pr
 const clip = (s: unknown, n = 1500) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 export const PROVIDERS: Provider[] = [
-  { id: 'tavily', label: 'Tavily', envKey: 'TAVILY_API_KEY', search: async (key, query, max, signal) => {
-    const body = await call('https://api.tavily.com/search', { method: 'POST', signal, headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ query, max_results: max, search_depth: 'basic' }) }, 'Tavily') as { results?: { title?: string; url?: string; content?: string }[] };
-    return (body.results || []).map(r => ({ title: clip(r.title, 200), url: r.url || '', text: clip(r.content), provider: 'Tavily' }));
-  } },
   { id: 'serper', label: 'Serper', envKey: 'SERPER_API_KEY', search: async (key, query, max, signal) => {
     const body = await call('https://google.serper.dev/search', { method: 'POST', signal, headers: { 'content-type': 'application/json', 'X-API-KEY': key }, body: JSON.stringify({ q: query, num: max }) }, 'Serper') as { organic?: { title?: string; link?: string; snippet?: string }[] };
     return (body.organic || []).map(r => ({ title: clip(r.title, 200), url: r.link || '', text: clip(r.snippet), provider: 'Serper' }));
+  } },
+  { id: 'tavily', label: 'Tavily', envKey: 'TAVILY_API_KEY', search: async (key, query, max, signal, opts) => {
+    const body = await call('https://api.tavily.com/search', { method: 'POST', signal, headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ query, max_results: max, search_depth: 'basic', ...(opts.fullText ? { include_raw_content: 'text' } : {}) }) }, 'Tavily') as { results?: { title?: string; url?: string; content?: string; raw_content?: string | null }[] };
+    return (body.results || []).map(r => ({ title: clip(r.title, 200), url: r.url || '', text: opts.fullText && r.raw_content ? clip(r.raw_content, 6000) : clip(r.content), provider: 'Tavily' }));
   } },
   { id: 'brave', label: 'Brave Search', envKey: 'BRAVE_API_KEY', search: async (key, query, max, signal) => {
     const body = await call(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${max}&extra_snippets=true`, { signal, headers: { Accept: 'application/json', 'X-Subscription-Token': key } }, 'Brave') as { web?: { results?: { title?: string; url?: string; description?: string; extra_snippets?: string[] }[] } };
@@ -56,15 +57,17 @@ export function webSearchStatus(): { provider: string; state: 'ready' | 'paused'
 
 const cache = new Map<string, { at: number; value: SearchResult[] }>();
 /** Searches with the first available provider; falls through to the next on quota or errors. */
-export async function webSearch(query: string, max = 5): Promise<SearchResult[]> {
-  const key = `${max}:${query.toLowerCase()}`;
+export async function webSearch(query: string, max = 5, opts: SearchOptions = {}): Promise<SearchResult[]> {
+  const key = `${max}:${opts.fullText ? 'full:' : ''}${query.toLowerCase()}`;
   const hit = cache.get(key); if (hit && Date.now() - hit.at < 6 * HOUR) return hit.value;
   const errors: string[] = [];
-  for (const p of configured()) {
+  const prefer = opts.prefer || [];
+  const order = [...configured()].sort((a, b) => (prefer.includes(a.id) ? prefer.indexOf(a.id) : 99) - (prefer.includes(b.id) ? prefer.indexOf(b.id) : 99));
+  for (const p of order) {
     const pause = pausedUntil.get(p.id); if (pause && pause.until > Date.now()) continue;
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const results = (await p.search(process.env[p.envKey] || '', query, max, controller.signal)).filter(r => /^https?:\/\//.test(r.url));
+      const results = (await p.search(process.env[p.envKey] || '', query, max, controller.signal, opts)).filter(r => /^https?:\/\//.test(r.url));
       cache.set(key, { at: Date.now(), value: results });
       return results;
     } catch (e) {

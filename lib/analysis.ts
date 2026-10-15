@@ -65,6 +65,18 @@ export function analyzeRules(input:string,fileName=''):Analysis {
   return {title,summary:(abstract||text.slice(0,950)).replace(/\s+/g,' ').slice(0,580),studyType:type,discipline:'To be confirmed by the author',keywords,strengths,considerations,checks,wordCount:words.length,estimatedReadMinutes:Math.max(1,Math.ceil(words.length/210)),mode:'rules',notice:'Rule-based screening only. Presence of a section does not establish study quality, novelty, validity, or journal eligibility.'};
 }
 function limitationsCheck(type:string,_text:string):boolean {return type==='Letter / correspondence';}
+/** Reads a JSON list from a model reply that may be a bare array or an object wrapping one (JSON modes require objects). */
+export function extractJsonList(text: string, key: string): unknown[] {
+  const cleaned = text.replace(/```(?:json)?/g, '').trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === 'object') { const v = (parsed as Record<string, unknown>)[key] ?? Object.values(parsed as object).find(Array.isArray); if (Array.isArray(v)) return v; }
+  } catch { /* fall through to bracket slicing */ }
+  const start = cleaned.indexOf('['); const end = cleaned.lastIndexOf(']');
+  if (start >= 0 && end > start) { const v = JSON.parse(cleaned.slice(start, end + 1)); if (Array.isArray(v)) return v; }
+  throw new Error('Invalid JSON list from model');
+}
 export function safeJsonExtract(raw:string):unknown {
   const cleaned=raw.replace(/^\s*```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'');
   try { return JSON.parse(cleaned); } catch { const start=cleaned.indexOf('{');const end=cleaned.lastIndexOf('}');if(start>=0&&end>start) return JSON.parse(cleaned.slice(start,end+1)); throw new Error('Invalid JSON from model');}

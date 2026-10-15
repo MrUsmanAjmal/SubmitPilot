@@ -69,6 +69,8 @@ test('keeps only well-formed publisher metrics for requested journals', () => {
   assert.equal(ivc?.impactFactor, 5); assert.equal(ivc?.citeScore, 7.7); assert.equal(ivc?.scopusQuartile, 'Q1'); assert.equal(ivc?.impactFactorYear, '2024');
   assert.equal(map.has('S999'), false);
   assert.equal(map.get('S414566')?.impactFactor, null); assert.equal(map.get('S414566')?.sourceUrl, null);
+  const asText = parsePublisherMetrics('[{"id":"S1","impactFactor":"5.0","citeScore":"n/a"}]', ['S1']).get('S1');
+  assert.equal(asText?.impactFactor, 5); assert.equal(asText?.citeScore, null);
 });
 
 test('keeps a looked-up number only when the cited page text contains it', () => {

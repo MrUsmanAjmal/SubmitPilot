@@ -4,6 +4,9 @@ import { ArrowUpRight, BookOpen, ExternalLink, Check, Copy, LoaderCircle, Shield
 import { useState } from 'react';
 
 const fmt = (n: number | null, digits = 2) => n == null ? '—' : n.toLocaleString('en-US', { maximumFractionDigits: digits });
+/** Impact Factor and CiteScore are always quoted with one decimal, e.g. 5.0. */
+const score = (n: number | null) => n == null ? '—' : n.toFixed(1);
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
 const usd = (n: number) => `$${n.toLocaleString('en-US')}`;
 const ACCESS: Record<Journal['metrics']['accessModel'], { label: string; detail: (m: Journal['metrics']) => string }> = {
   'open-access-apc': { label: 'Open access · author pays APC', detail: m => `Fully open access. Authors pay ${m.apcUsd ? usd(m.apcUsd) : 'an article processing charge'} after acceptance.` },
@@ -40,14 +43,14 @@ export default function JournalCard({ journal, index, fieldMode = false, publish
   const [expanded, setExpanded] = useState(false); const [copied, setCopied] = useState(false);
   const m = journal.metrics;
   const quartile = m.quartile || m.citeScoreQuartile || p?.scopusQuartile || null;
-  const quartileSource = m.quartile ? 'SJR (SCImago)' : m.citeScoreQuartile ? `CiteScore${m.citeScorePercentile != null ? `, ${m.citeScorePercentile}th percentile` : ''}` : quartile ? 'Scopus' : null;
+  const quartileSource = m.quartile ? 'SJR (SCImago)' : m.citeScoreQuartile ? `CiteScore${m.citeScorePercentile != null ? `, ${ordinal(m.citeScorePercentile)} percentile` : ''}` : quartile ? 'Scopus' : null;
   const citeScore = m.citeScore ?? p?.citeScore ?? null; const citeScoreYear = m.citeScore != null ? m.citeScoreYear : p?.citeScoreYear ?? null;
   const status = indexStatus(journal, p, publisherStatus);
   const pending = publisherStatus === 'loading' && !p;
   const spinner = <LoaderCircle className="spin" size={18} />;
   const headline: [string, React.ReactNode, string | null][] = [
-    ['CiteScore', pending && citeScore == null ? spinner : fmt(citeScore, 1), citeScoreYear],
-    ['Impact Factor', pending ? spinner : fmt(p?.impactFactor ?? null, 1), p?.impactFactorYear ? `JCR ${p.impactFactorYear}` : null],
+    ['CiteScore', pending && citeScore == null ? spinner : score(citeScore), citeScoreYear],
+    ['Impact Factor', pending ? spinner : score(p?.impactFactor ?? null), p?.impactFactorYear ? `JCR ${p.impactFactorYear}` : null],
     ['Quartile', pending && !quartile ? spinner : <>{quartile || '—'}{p?.jcrQuartile ? <small>JCR {p.jcrQuartile}</small> : null}</>, quartileSource],
   ];
   const copy = async () => { await navigator.clipboard.writeText([journal.name, journal.issn ? `ISSN ${journal.issn}` : '', `Status: ${status.label}`, `Impact Factor: ${fmt(p?.impactFactor ?? null, 1)}${p?.impactFactorYear ? ` (JCR ${p.impactFactorYear})` : ''} | CiteScore: ${fmt(citeScore, 1)} | Quartile: ${quartile || 'n/a'}`, `SJR: ${fmt(m.sjr, 3)} | Cites/doc (2y): ${fmt(m.citesPerDoc2y)} | OpenAlex 2y citedness: ${fmt(m.openAlexCitedness2y)}`, journal.homepage || journal.openalexUrl].filter(Boolean).join('\n')); setCopied(true); setTimeout(() => setCopied(false), 1600); };
@@ -73,7 +76,7 @@ export default function JournalCard({ journal, index, fieldMode = false, publish
       {headline.map(([label, value, sub]) => <div key={label}><strong>{value}</strong><span>{label}</span>{sub ? <small>{sub}</small> : null}</div>)}
       <div className={`index-status index-${status.tone}`}><span>STATUS</span><strong>{status.label}</strong></div>
     </div>
-    {p?.sourceUrl ? <a className="metric-source" href={p.sourceUrl} target="_blank" rel="noopener noreferrer">Impact Factor / CiteScore source: {new URL(p.sourceUrl).hostname} <ExternalLink size={11} /></a> : publisherStatus === 'done' && !p ? <p className="metric-source">Impact Factor lookup covers the top 20 results.</p> : null}
+    {p?.sourceUrl && p.impactFactor != null ? <a className="metric-source" href={p.sourceUrl} target="_blank" rel="noopener noreferrer">Impact Factor source: {new URL(p.sourceUrl).hostname.replace(/^www\./, '')} <ExternalLink size={11} /></a> : publisherStatus === 'done' && !p ? <p className="metric-source">Impact Factor lookup covers the top 20 results.</p> : null}
     <div className="metric-grid">{stats.map(([label, value, title]) => <div key={label} title={title}><span>{label}</span><strong>{value}</strong></div>)}</div>
     {journal.designEvidence ? <div className="journal-design"><ShieldAlert size={14} /><span>{journal.designEvidence}</span></div> : null}
     <div className="journal-meta">
