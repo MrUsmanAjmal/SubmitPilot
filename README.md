@@ -42,7 +42,8 @@ Choosing a journal is more than finding a publication that shares a few keywords
 - Ranks by **scope focus**: the share of each journal's output in your topics and how well its overall profile matches your subfield, so specialist venues are not buried under broad megajournals.
 - With Gemini configured, the AI reads the topic, abstract or manuscript and writes the search keywords, then re-ranks the candidates by scope; the AI view is shown separately and blended with the literature evidence.
 - **Three ways to search:** by research field (all journals dedicated to one of 252 OpenAlex subfields, ordered Q1 to Q4), by topic plus optional abstract, or by uploading the manuscript.
-- **Journal metrics:** SCImago best quartile (Q1–Q4 or not indexed), SJR, citations per document over 2 years, Scopus CiteScore (optional key), OpenAlex 2-year mean citedness and H-index, APC and open-access status. The Clarivate Impact Factor is proprietary and is not shown.
+- **Journal metrics:** SCImago best quartile (Q1–Q4 or not indexed), SJR, citations per document over 2 years, Scopus CiteScore (optional key), OpenAlex 2-year mean citedness and H-index, APC and open-access status. Impact Factor and CiteScore as displayed on publisher pages are found by web search and read by the AI; a number is kept only if it appears in the text of the page cited as its source.
+- **Journal fit check:** reads each journal's official author guidelines from the publisher's site and checks the manuscript against them: length, abstract, keywords and required statements are measured in code, and structure and scope are assessed by the AI.
 
 ### Conferences and workshops with deadlines
 
